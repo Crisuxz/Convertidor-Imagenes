@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertidor de Imágenes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Cabinet+Grotesk:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0d0d0d;
+  --paper: #f5f0e8;
+  --cream: #ede8dc;
+  --warm: #e8dfc8;
+  --accent: #c8450a;
+  --accent2: #e85d1a;
+  --gold: #d4a017;
+  --muted: #7a7060;
+  --border: #c8bfaa;
+  --success: #2d6a2d;
+  --radius: 4px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Cabinet Grotesk', sans-serif;
+  min-height: 100vh;
+}
+
+/* Subtle grain texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.6;
+}
+
+.page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+/* ── HEADER ── */
+header {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 20px;
+  margin-bottom: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.header-left h1 {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+.header-left h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.header-right {
+  text-align: right;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.edition-badge {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-label::before {
+  content: attr(data-num);
+  background: var(--accent);
+  color: white;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── PANEL ── */
+.panel {
+  background: var(--cream);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  margin-bottom: 20px;
+  transition: border-color 0.2s;
+}
+.panel:hover { border-color: #a09880; }
+
+/* ── DROP ZONE ── */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 52px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--paper);
+  position: relative;
+}
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: #fdf5ef;
+  transform: scale(1.01);
+}
+.dropzone:hover { border-color: #a09880; }
+
+.drop-icon {
+  font-size: 3rem;
+  margin-bottom: 14px;
+  display: block;
+  line-height: 1;
+  transition: transform 0.3s;
+}
+.dropzone:hover .drop-icon { transform: scale(1.1) rotate(-8deg); }
+.dropzone.dragover .drop-icon { transform: scale(1.15) rotate(-12deg); }
+
+.drop-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.drop-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+#file-input { display: none; }
+
+/* ── PREVIEW ── */
+.preview-bar {
+  display: none;
+  margin-top: 20px;
+  background: var(--paper);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: slideIn 0.3s ease both;
+}
+.preview-bar.show { display: flex; align-items: stretch; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.preview-thumb-wrap {
+  width: 90px;
+  flex-shrink: 0;
+  background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 0 / 14px 14px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.preview-thumb {
+  width: 90px; height: 90px;
+  object-fit: contain;
+}
+.preview-details {
+  padding: 14px 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+}
+.preview-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+.preview-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex; gap: 16px; flex-wrap: wrap;
+}
+.preview-meta span {
+  background: var(--warm);
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+}
+
+/* ── FORMAT GRID ── */
+.fmt-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+@media (max-width: 540px) { .fmt-grid { grid-template-columns: repeat(3,1fr); } }
+
+.fmt-btn {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 16px 8px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.fmt-btn .fmt-emoji { font-size: 1.5rem; display: block; margin-bottom: 6px; line-height: 1; }
+.fmt-btn:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 var(--border);
+}
+.fmt-btn.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+  box-shadow: 3px 3px 0 var(--accent);
+  transform: translateY(-2px);
+}
+.fmt-btn.active .fmt-emoji { filter: grayscale(0) brightness(1.4); }
+
+.fmt-desc {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 12px;
+  min-height: 16px;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+
+/* Quality */
+.quality-row {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+.quality-row.show { display: flex; }
+.quality-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+input[type=range] {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 3px;
+  background: linear-gradient(to right, var(--ink) 0%, var(--ink) var(--pct,95%), var(--border) var(--pct,95%));
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: var(--ink);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.35); }
+.quality-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  min-width: 36px;
+}
+
+/* ── CONVERT BUTTON ── */
+.convert-btn {
+  width: 100%;
+  padding: 18px;
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  color: var(--paper);
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  margin-top: 16px;
+}
+.convert-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.3s;
+}
+.convert-btn:hover:not(:disabled)::after { transform: scaleX(1); }
+.convert-btn:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: translate(-2px,-2px);
+}
+.convert-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.convert-btn.loading {
+  background: var(--muted);
+  border-color: var(--muted);
+  cursor: wait;
+}
+.spinner-wrap { display: none; }
+.convert-btn.loading .btn-text { display: none; }
+.convert-btn.loading .spinner-wrap {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.dot-loader { display: flex; gap: 5px; }
+.dot-loader span {
+  width: 7px; height: 7px;
+  background: var(--paper);
+  border-radius: 50%;
+  animation: dotBounce 1s infinite;
+}
+.dot-loader span:nth-child(2) { animation-delay: 0.15s; }
+.dot-loader span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dotBounce {
+  0%,80%,100% { transform: scale(0.7); opacity: 0.5; }
+  40%         { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── RESULT ── */
+.result-panel {
+  display: none;
+  background: #f0faf0;
+  border: 1.5px solid #a3d4a3;
+  border-radius: var(--radius);
+  padding: 24px;
+  animation: slideIn 0.4s ease both;
+}
+.result-panel.show { display: block; }
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.result-tick {
+  width: 28px; height: 28px;
+  background: var(--success);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.result-title {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--success);
+  letter-spacing: -0.01em;
+}
+
+.result-body {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.result-thumb-wrap {
+  width: 80px; height: 80px;
+  border: 1.5px solid #a3d4a3;
+  border-radius: var(--radius);
+  background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 0 / 14px 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.result-thumb { width: 100%; height: 100%; object-fit: contain; }
+
+.result-info { flex: 1; min-width: 120px; }
+.result-filename { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; word-break: break-all; }
+.result-stats {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px;
+}
+.stat-chip {
+  background: white;
+  border: 1px solid #a3d4a3;
+  border-radius: 99px;
+  padding: 2px 8px;
+}
+
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--success);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 22px;
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.dl-btn:hover {
+  background: #1e5c1e;
+  box-shadow: 3px 3px 0 var(--ink);
+  transform: translate(-1px,-1px);
+}
+
+/* ── ERROR ── */
+.error-box {
+  display: none;
+  background: #fdf0ef;
+  border: 1.5px solid #f0a090;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: #c0301a;
+  margin-top: 12px;
+}
+.error-box.show { display: block; }
+
+/* ── PROGRESS BAR ── */
+.progress-wrap {
+  display: none;
+  margin-top: 12px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-wrap.show { display: block; }
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="header-left">
+      <h1>Image<br><em>Converter</em></h1>
+    </div>
+    <div class="header-right">
+      JPEG · PNG · GIF<br>TIFF · SVG · BMP<br>
+    </div>
+  </header>
+
+  <!-- STEP 1: UPLOAD -->
+  <div class="panel">
+    <div class="section-label" data-num="1">Seleccionar imagen</div>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="file-input" accept="image/*">
+      <span class="drop-icon">🖼</span>
+      <div class="drop-title">Arrastra tu imagen aquí</div>
+      <div class="drop-sub">o haz clic para explorar archivos
+    </div>
+
+    <div class="preview-bar" id="preview-bar">
+      <div class="preview-thumb-wrap">
+        <img class="preview-thumb" id="preview-thumb" src="" alt="">
+      </div>
+      <div class="preview-details">
+        <div class="preview-name" id="preview-name">—</div>
+        <div class="preview-meta">
+          <span id="meta-size">—</span>
+          <span id="meta-type">—</span>
+          <span id="meta-dims">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: FORMAT + CONVERT -->
+  <div class="panel">
+    <div class="section-label" data-num="2">Formato de salida</div>
+
+    <div class="fmt-grid">
+      <button class="fmt-btn" data-fmt="JPEG" onclick="selectFmt(this)">
+        <span class="fmt-emoji">📷</span>JPEG
+      </button>
+      <button class="fmt-btn" data-fmt="PNG" onclick="selectFmt(this)">
+        <span class="fmt-emoji">🎨</span>PNG
+      </button>
+      <button class="fmt-btn" data-fmt="GIF" onclick="selectFmt(this)">
+        <span class="fmt-emoji">🎞</span>GIF
+      </button>
+      <button class="fmt-btn" data-fmt="TIFF" onclick="selectFmt(this)">
+        <span class="fmt-emoji">🖨</span>TIFF
+      </button>
+      <button class="fmt-btn" data-fmt="SVG" onclick="selectFmt(this)">
+        <span class="fmt-emoji">✏️</span>SVG
+      </button>
+      <button class="fmt-btn" data-fmt="BMP" onclick="selectFmt(this)">
+        <span class="fmt-emoji">🗂</span>BMP
+      </button>
+    </div>
+
+    <div class="fmt-desc" id="fmt-desc">← Elige el formato de destino</div>
+
+    <div class="quality-row" id="quality-row">
+      <span class="quality-label">CALIDAD</span>
+      <input type="range" id="quality" min="10" max="100" value="92" oninput="updateQ(this)">
+      <span class="quality-val" id="qval">92%</span>
+    </div>
+
+    <button class="convert-btn" id="cvt-btn" onclick="convert()" disabled>
+      <span class="btn-text">⚡ Convertir</span>
+      <span class="spinner-wrap">
+        <div class="dot-loader"><span></span><span></span><span></span></div>
+        Convirtiendo…
+      </span>
+    </button>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <!-- STEP 3: RESULT -->
+  <div class="result-panel" id="result-panel">
+    <div class="result-header">
+      <div class="result-tick">✓</div>
+      <div class="result-title">¡Conversión completada!</div>
+    </div>
+    <div class="result-body">
+      <div class="result-thumb-wrap">
+        <img class="result-thumb" id="result-thumb" src="" alt="">
+      </div>
+      <div class="result-info">
+        <div class="result-filename" id="result-filename">—</div>
+        <div class="result-stats">
+          <span class="stat-chip" id="stat-format">—</span>
+          <span class="stat-chip" id="stat-size">—</span>
+          <span class="stat-chip" id="stat-dims">—</span>
+        </div>
+      </div>
+      <a class="dl-btn" id="dl-btn" href="#" download>⬇ Descargar</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ──────────────────────────────────────────
+   STATE
+────────────────────────────────────────── */
+let file = null;
+let fmt  = null;
+
+const fmtInfo = {
+  JPEG: 'Fotos y fotografías. Compresión con pérdida, archivos pequeños.',
+  PNG:  'Transparencia y gráficos. Sin pérdida de calidad.',
+  GIF:  'Iconos simples y animaciones. Paleta de 256 colores.',
+  TIFF: 'Impresión y archivo profesional. Sin pérdida.',
+  SVG:  'Vector escalable. Embebe la imagen en XML.',
+  BMP:  'Mapa de bits sin comprimir. Máxima fidelidad.',
+};
+
+/* ──────────────────────────────────────────
+   DRAG & DROP
+────────────────────────────────────────── */
+const dz = document.getElementById('dropzone');
+dz.addEventListener('click', () => document.getElementById('file-input').click());
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+  else showErr('Por favor sube un archivo de imagen válido.');
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+/* ──────────────────────────────────────────
+   LOAD FILE
+────────────────────────────────────────── */
+function loadFile(f) {
+  file = f;
+  hideErr(); hideResult();
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const url = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      document.getElementById('preview-thumb').src = url;
+      document.getElementById('preview-name').textContent = f.name;
+      document.getElementById('meta-size').textContent = fmtBytes(f.size);
+      document.getElementById('meta-type').textContent = f.type || 'imagen';
+      document.getElementById('meta-dims').textContent = img.naturalWidth + '×' + img.naturalHeight;
+      document.getElementById('preview-bar').classList.add('show');
+    };
+    img.src = url;
+  };
+  reader.readAsDataURL(f);
+  updateBtn();
+}
+
+/* ──────────────────────────────────────────
+   FORMAT SELECT
+────────────────────────────────────────── */
+function selectFmt(btn) {
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fmt = btn.dataset.fmt;
+  document.getElementById('fmt-desc').textContent = fmtInfo[fmt] || '';
+  document.getElementById('quality-row').classList.toggle('show', fmt === 'JPEG');
+  hideErr(); hideResult(); updateBtn();
+}
+
+function updateQ(el) {
+  document.getElementById('qval').textContent = el.value + '%';
+  el.style.setProperty('--pct', el.value + '%');
+}
+document.getElementById('quality').style.setProperty('--pct','92%');
+
+function updateBtn() {
+  document.getElementById('cvt-btn').disabled = !(file && fmt);
+}
+
+/* ──────────────────────────────────────────
+   CORE CONVERSION  (pure Canvas API)
+────────────────────────────────────────── */
+async function convert() {
+  if (!file || !fmt) return;
+
+  const btn = document.getElementById('cvt-btn');
+  btn.classList.add('loading'); btn.disabled = true;
+  hideErr(); hideResult();
+  progress(10);
+
+  try {
+    const dataURL   = await readAsDataURL(file);
+    const img       = await loadImage(dataURL);
+    const quality   = parseInt(document.getElementById('quality').value) / 100;
+    const outName   = baseName(file.name) + '.' + extFor(fmt);
+
+    progress(40);
+
+    let resultURL, resultBytes;
+
+    if (fmt === 'SVG') {
+      // Embed as PNG inside SVG
+      const pngURL = imgToCanvas(img, 'image/png', 0.95);
+      const b64    = pngURL.split(',')[1];
+      const svgStr = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="${img.naturalWidth}" height="${img.naturalHeight}"
+     viewBox="0 0 ${img.naturalWidth} ${img.naturalHeight}">
+  <image width="${img.naturalWidth}" height="${img.naturalHeight}"
+         xlink:href="data:image/png;base64,${b64}"/>
+</svg>`;
+      const blob   = new Blob([svgStr], { type: 'image/svg+xml' });
+      resultURL    = URL.createObjectURL(blob);
+      resultBytes  = blob.size;
+
+    } else if (fmt === 'TIFF') {
+      // TIFF: write minimal uncompressed TIFF using Uint8Array
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const tiffBuf = makeTIFF(imgData);
+      const blob    = new Blob([tiffBuf], { type: 'image/tiff' });
+      resultURL     = URL.createObjectURL(blob);
+      resultBytes   = tiffBuf.byteLength;
+
+    } else {
+      // JPEG / PNG / GIF / BMP  via Canvas
+      const mimeMap = { JPEG:'image/jpeg', PNG:'image/png', GIF:'image/png', BMP:'image/bmp' };
+      const mime    = mimeMap[fmt];
+
+      // For JPEG flatten alpha onto white
+      const canvas  = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (fmt === 'JPEG' || fmt === 'BMP') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0);
+
+      const q      = (fmt === 'JPEG') ? quality : undefined;
+      const pngURL = canvas.toDataURL(mime, q);
+      const blob   = dataURItoBlob(pngURL);
+      resultURL    = URL.createObjectURL(blob);
+      resultBytes  = blob.size;
+    }
+
+    progress(90);
+
+    // Show result
+    document.getElementById('result-thumb').src   = resultURL;
+    document.getElementById('result-filename').textContent = outName;
+    document.getElementById('stat-format').textContent    = fmt;
+    document.getElementById('stat-size').textContent      = fmtBytes(resultBytes);
+    document.getElementById('stat-dims').textContent      = img.naturalWidth + '×' + img.naturalHeight;
+
+    const dl  = document.getElementById('dl-btn');
+    dl.href   = resultURL;
+    dl.download = outName;
+
+    document.getElementById('result-panel').classList.add('show');
+    progress(100);
+    setTimeout(() => {
+      document.getElementById('progress-wrap').classList.remove('show');
+      document.getElementById('result-panel').scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 500);
+
+  } catch(e) {
+    showErr('Error al convertir: ' + e.message);
+    progress(0);
+    document.getElementById('progress-wrap').classList.remove('show');
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+/* ──────────────────────────────────────────
+   MINIMAL TIFF WRITER (uncompressed RGBA)
+────────────────────────────────────────── */
+function makeTIFF(imgData) {
+  const w = imgData.width, h = imgData.height;
+  const pixels = imgData.data; // Uint8ClampedArray RGBA
+
+  // Convert RGBA → RGB
+  const rgb = new Uint8Array(w * h * 3);
+  for (let i = 0, j = 0; i < pixels.length; i += 4, j += 3) {
+    const a = pixels[i+3] / 255;
+    rgb[j]   = Math.round(pixels[i]   * a + 255 * (1-a));
+    rgb[j+1] = Math.round(pixels[i+1] * a + 255 * (1-a));
+    rgb[j+2] = Math.round(pixels[i+2] * a + 255 * (1-a));
+  }
+
+  const IFD_OFFSET  = 8;
+  const NUM_ENTRIES = 11;
+  const IFD_SIZE    = 2 + NUM_ENTRIES * 12 + 4;
+  const DATA_OFFSET = IFD_OFFSET + IFD_SIZE;  // where IFD extra data goes
+  const IMG_OFFSET  = DATA_OFFSET + 48;       // conservative space for extra data
+  const totalSize   = IMG_OFFSET + rgb.length;
+
+  const buf = new ArrayBuffer(totalSize);
+  const v   = new DataView(buf);
+
+  // Header: little-endian, magic 42, IFD offset
+  v.setUint16(0, 0x4949, true); // 'II'
+  v.setUint16(2, 42, true);
+  v.setUint32(4, IFD_OFFSET, true);
+
+  let p = IFD_OFFSET;
+  v.setUint16(p, NUM_ENTRIES, true); p += 2;
+
+  // BitsPerSample data (3 × uint16 = 6 bytes) stored at DATA_OFFSET
+  const bpsOff = DATA_OFFSET;
+  new DataView(buf).setUint16(bpsOff,   8, true);
+  new DataView(buf).setUint16(bpsOff+2, 8, true);
+  new DataView(buf).setUint16(bpsOff+4, 8, true);
+
+  // XResolution: rational at bpsOff+6
+  const xresOff = bpsOff + 6;
+  v.setUint32(xresOff,   72, true);
+  v.setUint32(xresOff+4,  1, true);
+  // YResolution: rational at xresOff+8
+  const yresOff = xresOff + 8;
+  v.setUint32(yresOff,   72, true);
+  v.setUint32(yresOff+4,  1, true);
+
+  function writeEntry(tag, type, count, value) {
+    v.setUint16(p,       tag,   true);
+    v.setUint16(p+2,     type,  true);
+    v.setUint32(p+4,     count, true);
+    v.setUint32(p+8,     value, true);
+    p += 12;
+  }
+
+  // type: 3=SHORT(uint16), 4=LONG(uint32), 5=RATIONAL
+  writeEntry(256, 4, 1, w);                  // ImageWidth
+  writeEntry(257, 4, 1, h);                  // ImageLength
+  writeEntry(258, 3, 3, bpsOff);             // BitsPerSample (offset)
+  writeEntry(259, 3, 1, 1);                  // Compression: none
+  writeEntry(262, 3, 1, 2);                  // PhotometricInterpretation: RGB
+  writeEntry(273, 4, 1, IMG_OFFSET);         // StripOffsets
+  writeEntry(277, 3, 1, 3);                  // SamplesPerPixel
+  writeEntry(278, 4, 1, h);                  // RowsPerStrip
+  writeEntry(279, 4, 1, rgb.length);         // StripByteCounts
+  writeEntry(282, 5, 1, xresOff);            // XResolution (offset)
+  writeEntry(283, 5, 1, yresOff);            // YResolution (offset)
+
+  v.setUint32(p, 0, true); // next IFD = 0
+
+  // Write pixel data
+  new Uint8Array(buf).set(rgb, IMG_OFFSET);
+
+  return buf;
+}
+
+/* ──────────────────────────────────────────
+   HELPERS
+────────────────────────────────────────── */
+function readAsDataURL(f) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsDataURL(f);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = src;
+  });
+}
+
+function imgToCanvas(img, mime, q) {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c.toDataURL(mime, q);
+}
+
+function dataURItoBlob(uri) {
+  const [head, data] = uri.split(',');
+  const mime = head.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i=0; i<bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function extFor(fmt) {
+  return { JPEG:'jpg', PNG:'png', GIF:'gif', TIFF:'tiff', SVG:'svg', BMP:'bmp' }[fmt] || fmt.toLowerCase();
+}
+
+function baseName(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(2) + ' MB';
+}
+
+function progress(pct) {
+  document.getElementById('progress-wrap').classList.add('show');
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+function showErr(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = msg; el.classList.add('show');
+}
+function hideErr()    { document.getElementById('error-box').classList.remove('show'); }
+function hideResult() { document.getElementById('result-panel').classList.remove('show'); }
+</script>
+</body>
+</html>
